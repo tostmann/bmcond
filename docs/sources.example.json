@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "sources": [
+    {
+      "id": "usb-1b1f-c020",
+      "transport": "usb=1b1f:c020",
+      "label": "HmIP-RFUSB",
+      "capabilities": ["bidcos", "hmip"],
+      "persistent": false,
+      "discovered_via": "libusb"
+    }
+  ],
+  "slots": {
+    "bidcos": "usb-1b1f-c020",
+    "hmip": "usb-1b1f-c020"
+  }
+}

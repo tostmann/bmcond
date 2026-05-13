@@ -1,0 +1,46 @@
+bmcond — GPL-2.0-or-later
+=========================
+
+Copyright © 2026 Dirk Tostmann <tostmann@gmail.com> and contributors.
+
+This program is free software; you can redistribute it and/or modify it
+under the terms of the GNU General Public License as published by the
+Free Software Foundation; either version 2 of the License, or (at your
+option) any later version.
+
+This program is distributed in the hope that it will be useful, but
+WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+General Public License for more details.
+
+You should have received a copy of the GNU General Public License along
+with this program; if not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0.txt>.
+
+  SPDX-License-Identifier: GPL-2.0-or-later
+
+──────────────────────────────────────────────────────────────────────────
+What this covers
+──────────────────────────────────────────────────────────────────────────
+
+bmcond (the busmatic-concentrator) is a userspace daemon that replaces
+eQ-3's closed-source `multimacd` for HomeMatic radio modules.  Pure C,
+links only against glibc.  No eQ-3 source code is incorporated.
+
+Frame-codec logic (BidCoS, HmIP, DualCoPro, LLMAC) was written from
+scratch based on:
+- AskSinPP (GPL) — public AskSin-Frame-Layout reference
+- piVCCU (GPLv2) — DualCoPro probe sequence cross-checked
+- multimacd live-strace observation — protocol behaviour pattern
+
+See CREDITS.md for full attribution.
+
+──────────────────────────────────────────────────────────────────────────
+Third-party material at runtime (not part of this repository)
+──────────────────────────────────────────────────────────────────────────
+
+When deployed, bmcond talks to:
+- eQ-3 closed-source binaries (rfd, HMServer.jar) via XML-RPC over PTY/HTTP
+  — NOT linked, NOT redistributed by this repository.
+- HomeMatic / HomeMatic IP radio hardware (HM-MOD-RPI-PCB, HmIP-RFUSB,
+  HM-LGW-O-TW-W-EU) — protocol implementation here is for interoperability
+  per §69e UrhG / EU-Directive 2009/24/EG Article 6.

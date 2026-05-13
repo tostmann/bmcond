@@ -1,0 +1,24 @@
+# Build artefakte
+*.o
+*.d
+*.so
+build/
+bin/
+
+# Editor / IDE
+*.swp
+*.swo
+.vscode/
+.idea/
+.cache/
+
+# Versionierung: version.h wird vom Makefile generiert
+version.h
+
+# Dev-only (nie public): rohe Captures, Test-Snapshots, Build-Counter
+captures/
+build_number.txt
+*.strace
+*.console
+*.pcap
+*.tar.gz
