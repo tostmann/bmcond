@@ -310,7 +310,12 @@ static int run_raw_uart_shim(struct transport *t, const char *link_path, int ver
                     fprintf(stderr, "shim: pty write: %s\n", strerror(errno));
                 }
                 rx_bytes += (uint64_t)n;
-                if (verbose > 1) fprintf(stderr, "shim: rx %zd\n", n);
+                if (verbose > 1) {
+                    fprintf(stderr, "shim: rx %zd:", n);
+                    for (ssize_t k = 0; k < n && k < 64; ++k)
+                        fprintf(stderr, " %02x", buf[k]);
+                    fprintf(stderr, "\n");
+                }
             } else if (n == 0 || (n < 0 && errno != EAGAIN && errno != EWOULDBLOCK)) {
                 fprintf(stderr, "shim: transport read returned %zd (%s) — reconnect\n",
                         n, n < 0 ? strerror(errno) : "EOF");
@@ -331,7 +336,12 @@ static int run_raw_uart_shim(struct transport *t, const char *link_path, int ver
                     fprintf(stderr, "shim: transport write: %s\n", strerror(errno));
                 }
                 tx_bytes += (uint64_t)n;
-                if (verbose > 1) fprintf(stderr, "shim: tx %zd\n", n);
+                if (verbose > 1) {
+                    fprintf(stderr, "shim: tx %zd:", n);
+                    for (ssize_t k = 0; k < n && k < 64; ++k)
+                        fprintf(stderr, " %02x", buf[k]);
+                    fprintf(stderr, "\n");
+                }
             } else if (n < 0 && errno != EAGAIN && errno != EWOULDBLOCK && errno != EIO) {
                 /* EIO = multimacd hat slave-side noch nicht geöffnet — normal */
                 fprintf(stderr, "shim: pty read: %s\n", strerror(errno));
@@ -426,8 +436,11 @@ static void usage(const char *prog)
         "  -C                   confgen emit: schreibt /etc/config/rfd.conf +\n"
         "                       /var/run/bmcd-config.json (Backup *.bmcd-pre).\n"
         "  -D                   confgen dry-run.\n"
+        "  -B                   opt-in: EFM in Bootloader zwingen vor\n"
+        "                       multimacd-Handoff (recovery-tool für\n"
+        "                       hängende App-States — kein Production-Default).\n"
         "  -v                   verbose\n"
-        "  -V                   very verbose (raw byte counts)\n"
+        "  -V                   very verbose (raw byte hex-dump in shim).\n"
         "  -h                   help\n",
         prog);
 }
@@ -452,6 +465,7 @@ int main(int argc, char *argv[])
     int      very_verbose = 0;
     int      conf_emit    = 0;
     int      conf_dry     = 0;
+    int      force_bl     = 0;
 
     static struct option long_opts[] = {
         { "raw-uart", required_argument, 0, 0x102 },
@@ -481,7 +495,7 @@ int main(int argc, char *argv[])
     } while (0)
 
     int c;
-    while ((c = getopt_long(argc, argv, "t:N:U:E:b:H:S:F:G:vVCDh",
+    while ((c = getopt_long(argc, argv, "t:N:U:E:b:H:S:F:G:vVCDBh",
                               long_opts, NULL)) != -1) {
         switch (c) {
         case 't':
@@ -557,6 +571,7 @@ int main(int argc, char *argv[])
             break;
         case 'C': conf_emit = 1; break;
         case 'D': conf_dry  = 1; break;
+        case 'B': force_bl  = 1; break;
         case 'v': verbose = 1; break;
         case 'V': verbose = 1; very_verbose = 1; break;
         case 0x102:
@@ -759,10 +774,43 @@ int main(int argc, char *argv[])
         }
     }
 
+    /* Optional opt-in recovery tool: EFM explizit in den Bootloader zwingen
+     * BEVOR multimacd übernimmt.  Marginal nützlich falls man weiß dass das
+     * Modul in einem hängenden App-State steckt; multimacd's eigene
+     * Boot-Sequenz funktioniert in der Regel auch ohne -B.  No-op wenn
+     * EFM bereits in BL ist.  Kein Production-Default. */
+    if (force_bl) {
+        char bl_tag[32] = {0};
+        if (copro_start_bootloader(t->fd, bl_tag, sizeof(bl_tag), 0) == 0) {
+            fprintf(stderr, "CONC: forced BL — tag='%s'\n", bl_tag);
+        } else {
+            fprintf(stderr, "CONC: WARN — force-BL fehlgeschlagen "
+                    "(multimacd-handoff dürfte trotzdem klappen wenn EFM "
+                    "bereits in BL ist)\n");
+        }
+        /* Drain residual frames (Push-confirmations from force-BL handshake)
+         * to ensure multimacd sees a clean state when it opens the PTY. */
+        uint8_t drain_buf[256];
+        int drain_total = 0;
+        for (int i = 0; i < 10; ++i) {
+            usleep(50000);  /* 50ms */
+            fd_set rfds; FD_ZERO(&rfds); FD_SET(t->fd, &rfds);
+            struct timeval tv = {0, 0};
+            if (select(t->fd + 1, &rfds, NULL, NULL, &tv) > 0) {
+                ssize_t n = read(t->fd, drain_buf, sizeof(drain_buf));
+                if (n > 0) { drain_total += n; i = 0; }  /* extend drain if data found */
+            }
+        }
+        if (drain_total > 0) {
+            fprintf(stderr, "CONC: drained %d residual bytes after force-BL\n",
+                    drain_total);
+        }
+    }
+
     fprintf(stderr, "CONC: started v" FW_VERSION_STRING "  raw-uart=%s\n",
             raw_uart_link);
 
-    int rc = run_raw_uart_shim(t, raw_uart_link, verbose);
+    int rc = run_raw_uart_shim(t, raw_uart_link, verbose + (very_verbose ? 1 : 0));
 
     transport_free(t);
     api_shutdown();
